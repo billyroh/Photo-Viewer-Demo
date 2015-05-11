@@ -9,17 +9,17 @@ photoPlaceholderLayer = new Layer
 
 # Photo Viewer
 
-scroll = new ScrollComponent({
+photoViewerScroll = new ScrollComponent({
 	width: Screen.width, 
 	height: Screen.height - 1
 })
 
-scroll.contentInset = {
+photoViewerScroll.contentInset = {
 	bottom: 600
 }
 
-scroll.content.backgroundColor = "rgba(0,0,0,0)"
-scroll.scrollHorizontal = false
+photoViewerScroll.content.backgroundColor = "rgba(0,0,0,0)"
+photoViewerScroll.scrollHorizontal = false
 
 urlArray = ["images/IS5ee67u5c6pwx1000000000.jpg",
 			"images/IS5ixv67gq1mkx1000000000.jpg",
@@ -67,7 +67,7 @@ for url in urlArray
 	photoArray.push photoLayer
 
 for photoLayer, index in photoArray
-	photoLayer.superLayer = scroll.content
+	photoLayer.superLayer = photoViewerScroll.content
 	if index > 0
 		previousPhoto = photoArray[index - 1]
 		photoLayer.y = previousPhoto.y + previousPhoto.height + 20
@@ -81,30 +81,48 @@ photoArray[2].scale = 0.98
 
 photoStripWidth = 50
 
+photoStripWrapper = new Layer({
+	x: Screen.width
+	width: photoStripWidth
+	height: Screen.height
+	backgroundColor: "none"
+})
+
 photoStripScroll = new ScrollComponent({
-	x: Screen.width - photoStripWidth
 	width: photoStripWidth, 
 	height: Screen.height - 1
 	backgroundColor: "rgba(0,0,0,0.2)"
 	scrollHorizontal: false
+	superLayer: photoStripWrapper
 })
 
-photoStripLayer = new Layer
-	x: 0, y: Screen.height / 2 - (photoStripWidth / 2), width: photoStripWidth, height: Screen.height, superLayer: photoStripScroll.content
+photoStripLayer = new Layer({
+	width: photoStripWidth
+	height: Screen.height
+	superLayer: photoStripScroll.content
+})
 	
-positionIndicatorLayer = new Layer
-	y: (photoStripScroll.height / 2) - (photoStripWidth / 2), width: photoStripWidth, height: photoStripWidth, superLayer: photoStripScroll.content, borderWidth: 4,
-	borderColor: "yellow", backgroundColor: "none"
+positionIndicatorLayer = new Layer({
+	y: Screen.height / 2
+	width: photoStripWidth
+	height: photoStripWidth
+	superLayer: photoStripWrapper
+	borderWidth: 4,
+	borderColor: "yellow"
+	backgroundColor: "none"
+})
 
 photoStripLayer.height = photoStripLayer.width * urlArray.length
 photoStripScroll.contentInset = {
-	bottom: Screen.height / 2
+	top: Screen.height / 2
+	bottom: Screen.height / 2 - photoStripLayer.width
 }
 
 photoStripScroll.bringToFront()
 positionIndicatorLayer.bringToFront()
+photoStripWrapper.bringToFront()
 photoPlaceholderLayer.superLayer = backgroundLayer
-scroll.placeBefore(backgroundLayer)
+photoViewerScroll.placeBefore(backgroundLayer)
 
 # States
 
@@ -124,48 +142,73 @@ photoArray[2].states.add({
 	enablePhotoViewer: {scale: 1, opacity: 1}
 })
 
-scroll.content.states.add({
+photoViewerScroll.content.states.add({
 	enablePhotoViewer: {y: 0}
+})
+
+photoStripWrapper.states.add({
+	enablePhotoStrip: {x: Screen.width - photoStripWrapper.width}
 })
 
 # Interaction
 
 photoViewerIsEnabled = false
-scroll.scrollVertical = false
+photoViewerScroll.scrollVertical = false
 photoArray[0].on Events.Click, (event, layer) ->
 	if photoViewerIsEnabled
 		photoArray[1].states.next("default", "enablePhotoViewer")
 		photoArray[2].states.next("default", "enablePhotoViewer")
-		scroll.content.states.next("default", "enablePhotoViewer")
+		photoViewerScroll.content.states.next("default", "enablePhotoViewer")
 		backgroundLayer.states.next("default", "enablePhotoViewer")
-		scroll.scrollVertical = false
+		photoViewerScroll.scrollVertical = false
 		photoViewerIsEnabled = false
 	else
 		backgroundLayer.states.next("default", "enablePhotoViewer")
-		scroll.content.states.next("default", "enablePhotoViewer")
+		photoViewerScroll.content.states.next("default", "enablePhotoViewer")
 		Utils.delay 0.15, ->
 			photoArray[1].states.next("default", "enablePhotoViewer")
 		Utils.delay 0.3, ->
 			photoArray[2].states.next("default", "enablePhotoViewer")
-		scroll.scrollVertical = true
+		photoViewerScroll.scrollVertical = true
 		photoViewerIsEnabled = true
 
-scroll.on Events.Move, ->
+isScrollingQuickly = false
+isScrubbingPhotoStrip = false
+
+photoViewerScroll.on Events.Move, ->
 	positionPhotoStrip()
+	showPhotoStrip()
+	
+photoViewerScroll.on Events.ScrollAnimationDidEnd, ->
+	hidePhotoStrip()
 
 photoStripScroll.on Events.Move, ->
-	positionPhotoStrip()
+	isScrubbingPhotoStrip = true
+	positionPhotoViewer()
+	showPhotoStrip()
+	
+photoStripScroll.on Events.ScrollAnimationDidEnd, ->
+	isScrubbingPhotoStrip = false
 	
 positionPhotoStrip = ->
-	progressPercentage = scroll.scrollY / scroll.content.height
-	positionIndicatorLayer.y = photoStripScroll.scrollY + (photoStripScroll.height / 2) - (positionIndicatorLayer.width / 2)
-	photoStripLayer.y = (Screen.height / 2 - (photoStripWidth / 2)) - (progressPercentage * photoStripLayer.height)
+	progressPercentage = photoViewerScroll.scrollY / photoViewerScroll.content.height
+	photoStripScroll.scrollY = progressPercentage * (photoStripScroll.height + (Screen.height / 2))
 	
 positionPhotoViewer = ->
 	progressPercentage = photoStripScroll.scrollY / photoStripScroll.content.height
+	photoViewerScroll.scrollY = progressPercentage * photoViewerScroll.content.height
 	
+# TODO Get time between current and last swipe. If it's less than n seconds, persist photo strip.
 	
-	
-# 	print scroll.scrollY
-#     if Math.abs(scroll.velocity.y) > 5
-#     	123
+showPhotoStrip = ->
+	if Math.abs(photoViewerScroll.velocity.y) > 5
+		photoStripWrapper.states.switch("enablePhotoStrip")
+		isScrollingQuickly = true
+	else
+		isScrollingQuickly = false
+
+hidePhotoStrip = ->
+	if isScrollingQuickly or isScrubbingPhotoStrip
+		return
+	Utils.delay 0.3, ->
+		photoStripWrapper.states.switch("default")
