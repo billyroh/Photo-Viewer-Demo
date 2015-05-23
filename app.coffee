@@ -1,11 +1,26 @@
 # Background
 
+firstPhotoYOffset = 127
+
 backgroundColorLayer = new Layer
 	x:0, y:0, width:750, height:1334, backgroundColor:"#000"
 backgroundLayer = new Layer
 	x:0, y:0, width:750, height:1334, image:"images/image1.PNG"
 photoPlaceholderLayer = new Layer
-		x:0, y:127, width:750, height:562, backgroundColor: "#3C3C3C"
+	x:0, y:firstPhotoYOffset, width:750, height:562, backgroundColor: "#3C3C3C"
+photoViewerNavigationController = new Layer
+	x:0, y:0, width:750, height:208, image:"images/iPhone 6.png", opacity: 0
+
+# Navigation Viewer
+
+closeButton = new Layer({
+	x: 0
+	y: 30
+	width: 100
+	height: 100
+	opacity: 0
+	superLayer: photoViewerNavigationController
+})
 
 # Photo Viewer
 
@@ -60,10 +75,11 @@ urlArray = ["images/IS5ee67u5c6pwx1000000000.jpg",
 			]
 
 photoArray = []
+thumbnailArray = []
 
 for url in urlArray
 	photoLayer = new Layer
-		x:0, y:127, width:750, height:562, image:url
+		x:0, y:firstPhotoYOffset, width:750, height:562, image:url
 	photoArray.push photoLayer
 
 for photoLayer, index in photoArray
@@ -82,10 +98,13 @@ photoArray[2].scale = 0.98
 photoStripWidth = 50
 
 photoStripWrapper = new Layer({
-	x: Screen.width
+	x: Screen.width + 20
 	width: photoStripWidth
 	height: Screen.height
 	backgroundColor: "none"
+	shadowBlur: 20
+	shadowX: 0
+	shadowColor: "rgba(0,0,0,0.5)"
 })
 
 photoStripScroll = new ScrollComponent({
@@ -118,11 +137,23 @@ photoStripScroll.contentInset = {
 	bottom: Screen.height / 2 - photoStripLayer.width
 }
 
+for url in urlArray
+	thumbnailLayer = new Layer
+		x:0, y:0, height:photoStripWidth, image:url
+	thumbnailArray.push thumbnailLayer
+
+for thumbnailLayer, index in thumbnailArray
+	thumbnailLayer.superLayer = photoStripLayer
+	if index > 0
+		previousThumbnail = thumbnailArray[index - 1]
+		thumbnailLayer.y = previousThumbnail.y + thumbnailLayer.height
+
 photoStripScroll.bringToFront()
 positionIndicatorLayer.bringToFront()
 photoStripWrapper.bringToFront()
 photoPlaceholderLayer.superLayer = backgroundLayer
 photoViewerScroll.placeBefore(backgroundLayer)
+photoViewerNavigationController.bringToFront()
 
 # States
 
@@ -150,65 +181,96 @@ photoStripWrapper.states.add({
 	enablePhotoStrip: {x: Screen.width - photoStripWrapper.width}
 })
 
+photoViewerNavigationController.states.add({
+	enablePhotoViewer: {opacity: 1}
+})
+
 # Interaction
 
 photoViewerIsEnabled = false
 photoViewerScroll.scrollVertical = false
 photoArray[0].on Events.Click, (event, layer) ->
-	if photoViewerIsEnabled
-		photoArray[1].states.next("default", "enablePhotoViewer")
-		photoArray[2].states.next("default", "enablePhotoViewer")
-		photoViewerScroll.content.states.next("default", "enablePhotoViewer")
-		backgroundLayer.states.next("default", "enablePhotoViewer")
-		photoViewerScroll.scrollVertical = false
-		photoViewerIsEnabled = false
-	else
-		backgroundLayer.states.next("default", "enablePhotoViewer")
-		photoViewerScroll.content.states.next("default", "enablePhotoViewer")
-		Utils.delay 0.15, ->
-			photoArray[1].states.next("default", "enablePhotoViewer")
-		Utils.delay 0.3, ->
-			photoArray[2].states.next("default", "enablePhotoViewer")
-		photoViewerScroll.scrollVertical = true
-		photoViewerIsEnabled = true
+	togglePhotoViewer()
+	
+photoViewerNavigationController.on Events.Click, (event, layer) ->
+	togglePhotoViewer()
 
-isScrollingQuickly = false
-isScrubbingPhotoStrip = false
+togglePhotoViewer = ->
+	if photoViewerIsEnabled
+		if photoStripWrapper.states.current is "enablePhotoStrip"
+			photoStripWrapper.states.switch("default")
+			Utils.delay 0.2, ->
+				hidePhotoViewer()
+		else
+			hidePhotoViewer()
+	else
+		showPhotoViewer()
+
+hidePhotoViewer = ->
+	photoArray[1].states.switch("default")
+	photoArray[2].states.switch("default")
+	photoViewerScroll.content.states.switch("default")
+	backgroundLayer.states.switch("default")
+	photoViewerNavigationController.states.switch("default")
+	photoViewerScroll.scrollVertical = false
+	photoViewerIsEnabled = false
+
+showPhotoViewer = ->
+	backgroundLayer.states.switch("enablePhotoViewer")
+	photoViewerScroll.content.states.switch("enablePhotoViewer")
+	Utils.delay 0.15, ->
+		photoViewerNavigationController.states.switch("enablePhotoViewer")
+		photoArray[1].states.switch("enablePhotoViewer")
+	Utils.delay 0.3, ->
+		photoArray[2].states.switch("enablePhotoViewer")
+	photoViewerScroll.scrollVertical = true
+	photoViewerIsEnabled = true
+
+lastScrubTime = null
+delayAmount = 1.5
+minimumVelocity = 5
+numberOfFastSwipes = 0
+numberOfFastSwipesThreshold = 1
+
+photoViewerScroll.on Events.ScrollAnimationDidStart, ->
+	if Math.abs(photoViewerScroll.velocity.y) > minimumVelocity
+		numberOfFastSwipes += 1
+	else
+		numberOfFastSwipes = 0
+	if numberOfFastSwipes > numberOfFastSwipesThreshold
+		showPhotoStrip()
 
 photoViewerScroll.on Events.Move, ->
 	positionPhotoStrip()
-	showPhotoStrip()
-	
-photoViewerScroll.on Events.ScrollAnimationDidEnd, ->
-	hidePhotoStrip()
 
 photoStripScroll.on Events.Move, ->
-	isScrubbingPhotoStrip = true
 	positionPhotoViewer()
 	showPhotoStrip()
 	
-photoStripScroll.on Events.ScrollAnimationDidEnd, ->
-	isScrubbingPhotoStrip = false
-	
 positionPhotoStrip = ->
 	progressPercentage = photoViewerScroll.scrollY / photoViewerScroll.content.height
-	photoStripScroll.scrollY = progressPercentage * (photoStripScroll.height + (Screen.height / 2))
+	photoStripScroll.scrollY = progressPercentage * (photoStripScroll.height + photoStripScroll.contentInset.top - firstPhotoYOffset)
 	
 positionPhotoViewer = ->
 	progressPercentage = photoStripScroll.scrollY / photoStripScroll.content.height
 	photoViewerScroll.scrollY = progressPercentage * photoViewerScroll.content.height
-	
-# TODO Get time between current and last swipe. If it's less than n seconds, persist photo strip.
+	if progressPercentage <= 0
+		photoViewerScroll.velocity.y = photoStripScroll.velocity.y
 	
 showPhotoStrip = ->
-	if Math.abs(photoViewerScroll.velocity.y) > 5
-		photoStripWrapper.states.switch("enablePhotoStrip")
-		isScrollingQuickly = true
-	else
-		isScrollingQuickly = false
+	photoStripWrapper.states.switch("enablePhotoStrip")
+	currentDate = new Date
+	lastScrubTime = currentDate.getTime()
+	hidePhotoStrip()
 
 hidePhotoStrip = ->
-	if isScrollingQuickly or isScrubbingPhotoStrip
+	Utils.delay delayAmount, ->
+		currentDate = new Date
+		if ((currentDate.getTime() - lastScrubTime) / 1000 >= delayAmount)
+			photoStripWrapper.states.switch("default")
+			numberOfFastSwipes = 0
+
+checkTimeSinceLastScrub = ->
+	currentDate = new Date
+	if currentDate.getTime()
 		return
-	Utils.delay 0.3, ->
-		photoStripWrapper.states.switch("default")
