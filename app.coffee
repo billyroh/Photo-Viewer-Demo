@@ -1,13 +1,13 @@
 # Background
 
-firstPhotoYOffset = 127
+navigationBarOffset = 127
 
 backgroundColorLayer = new Layer
 	x:0, y:0, width:750, height:1334, backgroundColor:"#000"
 backgroundLayer = new Layer
 	x:0, y:0, width:750, height:1334, image:"images/image1.PNG"
 photoPlaceholderLayer = new Layer
-	x:0, y:firstPhotoYOffset, width:750, height:562, backgroundColor: "#3C3C3C"
+	x:0, y:navigationBarOffset, width:750, height:562, backgroundColor: "#3C3C3C"
 photoViewerNavigationController = new Layer
 	x:0, y:0, width:750, height:208, image:"images/iPhone 6.png", opacity: 0
 
@@ -79,7 +79,7 @@ thumbnailArray = []
 
 for url in urlArray
 	photoLayer = new Layer
-		x:0, y:firstPhotoYOffset, width:750, height:562, image:url
+		x:0, y:navigationBarOffset, width:750, height:562, image:url
 	photoArray.push photoLayer
 
 for photoLayer, index in photoArray
@@ -192,7 +192,7 @@ photoViewerScroll.scrollVertical = false
 photoArray[0].on Events.Click, (event, layer) ->
 	togglePhotoViewer()
 	
-photoViewerNavigationController.on Events.Click, (event, layer) ->
+closeButton.on Events.Click, (event, layer) ->
 	togglePhotoViewer()
 
 togglePhotoViewer = ->
@@ -228,7 +228,7 @@ showPhotoViewer = ->
 
 lastScrubTime = null
 delayAmount = 1.5
-minimumVelocity = 5
+minimumVelocity = 4
 numberOfFastSwipes = 0
 numberOfFastSwipesThreshold = 1
 
@@ -249,7 +249,7 @@ photoStripScroll.on Events.Move, ->
 	
 positionPhotoStrip = ->
 	progressPercentage = photoViewerScroll.scrollY / photoViewerScroll.content.height
-	photoStripScroll.scrollY = progressPercentage * (photoStripScroll.height + photoStripScroll.contentInset.top - firstPhotoYOffset)
+	photoStripScroll.scrollY = progressPercentage * (photoStripScroll.height + photoStripScroll.contentInset.top - navigationBarOffset)
 	
 positionPhotoViewer = ->
 	progressPercentage = photoStripScroll.scrollY / photoStripScroll.content.height
